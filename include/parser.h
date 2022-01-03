@@ -310,19 +310,8 @@ struct LexerBase {
         NextChar();              /// yeet " or '
         if (at_eof) goto unterminated;
 
-        /// Handle '-quoted strings
-        if (term == L'\'') {
-            while (!at_eof && lastc != L'\'') {
-                token->string_content += lastc;
-                NextChar();
-            }
-            if (at_eof && lastc != '\'') goto unterminated;
-            if (yeet_terminator) NextChar(); /// yeet '
-            return;
-        }
-
         /// Handle "-quoted strings
-        while (!at_eof && lastc != L'"') {
+        while (!at_eof && lastc != term) {
             if (lastc == '\\') {
                 NextChar();
                 if (at_eof && lastc == Eof) goto unterminated;
@@ -345,8 +334,8 @@ struct LexerBase {
             NextChar();
         }
 
-        if (at_eof && lastc != L'"') goto unterminated;
-        if (yeet_terminator) NextChar(); /// yeet "
+        if (at_eof && lastc != term) goto unterminated;
+        if (yeet_terminator) NextChar(); /// yeet " or '
         return;
 
     unterminated:
