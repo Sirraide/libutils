@@ -1,5 +1,7 @@
 #include "../include/parser.h"
 
+LIBUTILS_NAMESPACE_BEGIN
+
 template <
     typename File,
     typename SourceLocation,
@@ -40,3 +42,5 @@ String StringiseType<>(const TokenBase<>* token) {
         default: return U"[INVALID]\n";
     }
 }
+
+LIBUTILS_NAMESPACE_END
