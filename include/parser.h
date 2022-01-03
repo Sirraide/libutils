@@ -318,6 +318,7 @@ struct LexerBase {
                 switch (lastc) {
                     ESCAPE_CHAR(U'n', U"\n", 1);
                     ESCAPE_CHAR(U'r', U"\r", 1);
+                    ESCAPE_CHAR(U't', U"\v", 1);
                     ESCAPE_CHAR(U'f', U"\f", 1);
                     ESCAPE_CHAR(U'v', U"\v", 1);
                     ESCAPE_CHAR(U'e', U"\033", 1);
