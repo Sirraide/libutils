@@ -150,21 +150,14 @@ struct TokenBase {
 template <>
 String StringiseType(const auto* token);
 
+template <>
+String StringiseType<>(const TokenBase<>* token);
+
 template <
     typename _File           = FileBase,
     typename _SourceLocation = SourceLocationBase<_File>,
     typename _Token          = TokenBase<TokenTypeBase, _File>,
     bool _newline_is_token   = false>
-struct LexerBase;
-
-template <>
-String StringiseType<>(const TokenBase<>* token);
-
-template <
-    typename _File,
-    typename _SourceLocation,
-    typename _Token,
-    bool _newline_is_token>
 struct LexerBase {
     using File           = _File;
     using SourceLocation = _SourceLocation;
