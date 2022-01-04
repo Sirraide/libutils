@@ -67,56 +67,56 @@ std::string ToUTF8(const String& what);
  */
 String ToUTF32(const std::string& what);
 
-/**
- * Whether a Container supports the operations
- * begin() and end()
- */
-template <typename Container, typename Element>
-concept Searchable = requires(Container c, Element e) {
-    { c.begin() } -> std::forward_iterator;
-    { c.end() } -> std::forward_iterator;
-    std::is_same_v<decltype(*c.begin()), decltype(e)>;
+/// Base template
+template <bool cond, typename _Then, typename _Else>
+struct type_if {};
+
+/// Then-branch
+template <typename _Then, typename _Else>
+struct type_if<true, _Then, _Else> {
+    typedef _Then type;
+};
+
+/// Else-branch
+template <typename _Then, typename _Else>
+struct type_if<false, _Then, _Else> {
+    typedef _Else type;
 };
 
 /**
- * Whether a Container supports the operations
- * cbegin() and cend()
+ * Evaluates to one of two types based on a condition
+ * @tparam cond The condition
+ * @tparam _Then The type this evaluates to if `cond' is true
+ * @tparam _Else The type this evaluates to if `cond' is false
  */
-template <typename Container, typename Element>
-concept CSearchable = requires(Container c, const Element& e) {
-    { c.cbegin() } -> std::forward_iterator;
-    { c.cend() } -> std::forward_iterator;
-    std::is_same_v<decltype(*c.cbegin()), decltype(e)>;
-};
+
+template <bool cond, typename _Then, typename _Else>
+using type_if_t = typename type_if<cond, _Then, _Else>::type;
 
 /**
- * Find and return an iterator to and element in a collection
- *
- * @param collection The collection to be searched
- * @param element The element to be found
- * @return An iterator to the element found, or collection.end()
- * if the element was not found.
+ * Convert a string to lowercase
+ * @tparam TString The string type to be used
+ * @param tstring The string to convert
+ * @returns A copy of `tstring' with each character converted to lowercase
  */
-template <typename Element, Searchable<Element> Collection>
-auto Find(Collection& collection, const Element& element) -> decltype(collection.begin()) {
-    for (auto it = collection.begin(); it != collection.end(); ++it)
-        if (*it == element) return it;
-    return collection.end();
+template <typename TString>
+TString ToLower(TString tstring) {
+    std::transform(tstring.begin(), tstring.end(), tstring.begin(), [](unsigned char c) { return std::tolower(c); });
+    return tstring;
 }
 
 /**
- * Find and return an immutable iterator to and element in a collection
- *
- * @param collection The immutable collection to be searched
- * @param element The element to be found
- * @return A const-iterator to the element found, or collection.cend()
- * if the element was not found.
+ * Trim leading and trailing whitespace
+ * @tparam TString The string type to be used
+ * @param tstring The string to trim
+ * @returns A copy of `tstring' with leading and trailing whitespace removed
  */
-template <typename Element, CSearchable<Element> Collection>
-auto Find(const Collection& collection, const Element& element) -> decltype(collection.cbegin()) {
-    for (auto it = collection.cbegin(); it != collection.cend(); ++it)
-        if (*it == element) return it;
-    return collection.cend();
+template <typename TString>
+TString Trim(const TString& tstring) requires(std::is_same_v<std::remove_cvref_t<decltype(tstring[0])>, char>) {
+    U64 start = 0, end = tstring.size() - 1;
+    while (start < end && std::isspace((unsigned char) tstring[start])) start++;
+    while (end > start && std::isspace((unsigned char) tstring[end])) end--;
+    return tstring.substr(start, end - start + !std::isspace((unsigned char) tstring[end]));
 }
 
 LIBUTILS_NAMESPACE_END
