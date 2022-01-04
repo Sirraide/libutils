@@ -204,7 +204,7 @@ public:
      * @return The value of the option
      */
     template <Type T>
-    auto get(const std::string& name) -> TypeEnumToDataType<T> {
+    auto get(const std::string& name) const -> TypeEnumToDataType<T> {
         auto opt = std::find(options.begin(), options.end(), name);
         if (opt == options.end()) opt = std::find(anonymous.begin(), anonymous.end(), name);
         if (opt == anonymous.end()) Die("Clopts: No such option: %s", name.data());
