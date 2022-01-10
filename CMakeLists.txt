@@ -7,16 +7,17 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR})
 file(GLOB SRC src/*.cc src/*.h include/*.h)
 
 add_library(utils STATIC ${SRC})
+target_compile_options(utils PRIVATE
+        -Wall -Wextra -Wundef -Werror=return-type -Wconversion -Wpedantic
+        -Wno-gnu-zero-variadic-macro-arguments -Wno-dollar-in-identifier-extension
+        -Wno-gnu-case-range)
+if (${CMAKE_CXX_COMPILER} STREQUAL "clang++")
+    target_compile_options(utils PRIVATE -Xclang -fcolor-diagnostics)
+endif ()
 if (${CMAKE_BUILD_TYPE} STREQUAL "Release")
-    target_compile_options(utils PRIVATE
-            -Wall -Wextra -Wundef -Werror=return-type -Wconversion -Wpedantic
-            -fno-exceptions -Wno-gnu-zero-variadic-macro-arguments -Wno-dollar-in-identifier-extension
-            -O3 -Xclang -fcolor-diagnostics)
+    target_compile_options(utils PRIVATE -O3)
 else ()
-    target_compile_options(utils PRIVATE
-            -Wall -Wextra -Wundef -Werror=return-type -Wconversion -Wpedantic
-            -fno-exceptions -Wno-gnu-zero-variadic-macro-arguments -Wno-dollar-in-identifier-extension
-            -O0 -ggdb -Xclang -fcolor-diagnostics)
+    target_compile_options(utils PRIVATE -O0 -ggdb)
 endif ()
 
 if (NOT APPLE)

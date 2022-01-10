@@ -5,6 +5,12 @@
 #include <iostream>
 #include <string>
 
+#ifdef NDEBUG
+#define DEBUG(...)
+#else
+#define DEBUG(...) __VA_ARGS__
+#endif
+
 #ifdef LIBUTILS_NO_GLOBAL_NAMESPACE
 #    define LIBUTILS_NAMESPACE_BEGIN namespace utils {
 #    define LIBUTILS_NAMESPACE_END   }
