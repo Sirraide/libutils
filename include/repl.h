@@ -1,7 +1,7 @@
 #ifndef SCRIPT_REPL_H
 #define SCRIPT_REPL_H
 
-#include "utils.h"
+#include "./utils.h"
 
 #include <functional>
 struct Repl {
