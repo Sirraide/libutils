@@ -6,9 +6,9 @@
 #include <string>
 
 #ifdef NDEBUG
-#define DEBUG(...)
+#    define DEBUG(...)
 #else
-#define DEBUG(...) __VA_ARGS__
+#    define DEBUG(...) __VA_ARGS__
 #endif
 
 #ifdef LIBUTILS_NO_GLOBAL_NAMESPACE
@@ -23,8 +23,16 @@
     []<bool flag = false> { static_assert(flag, msg); } \
     ()
 
+#define LIBUTILS_UNREACHABLE(...)                                               \
+    do {                                                                        \
+        __builtin_unreachable();                                                \
+        std::cerr << __FILE__ << ":" << __LINE__ << ": Error: Unreachable" << __func__ __VA_OPT__(<< "\n\tNote: "<< __VA_ARGS__) << "\n"; \
+        abort();                                                                \
+    } while (0)
+
 #ifndef LIBUTILS_USE_SCREAMING_SNAKE_CASE
 #    define ConstexprNotImplemented(msg) LIBUTILS_CONSTEXPR_NOT_IMPLEMENTED(msg)
+#    define Unreachable(...)             LIBUTILS_UNREACHABLE(__VA_ARGS__)
 #endif
 
 LIBUTILS_NAMESPACE_BEGIN
