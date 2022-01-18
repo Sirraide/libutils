@@ -2,6 +2,7 @@
 
 #include <codecvt>
 #include <locale>
+#include <cstdarg>
 
 LIBUTILS_NAMESPACE_BEGIN
 
@@ -16,16 +17,6 @@ void Die(const char* format, ...) {
     exit(1);
 }
 
-std::string ToUTF8(const String& what) {
-    std::wstring_convert<std::codecvt_utf8<Char>, Char> conv;
-    return conv.to_bytes(what);
-}
-
-String ToUTF32(const std::string& what) {
-    std::wstring_convert<std::codecvt_utf8<Char>, Char> conv;
-    return conv.from_bytes(what);
-}
-
 String Escape(const String& str) {
     String ret;
     for (auto c : str) {
@@ -37,6 +28,23 @@ String Escape(const String& str) {
             case U'\f': ret += U"\\f"; continue;
             case U'\'': ret += U"\\\'"; continue;
             case U'\"': ret += U"\\\""; continue;
+            default: ret += c;
+        }
+    }
+    return ret;
+}
+
+std::string Escape(const std::string& str) {
+    std::string ret;
+    for (auto c : str) {
+        switch (c) {
+            case '\n': ret += "\\n"; continue;
+            case '\r': ret += "\\r"; continue;
+            case '\t': ret += "\\t"; continue;
+            case '\v': ret += "\\v"; continue;
+            case '\f': ret += "\\f"; continue;
+            case '\'': ret += "\\\'"; continue;
+            case '\"': ret += "\\\""; continue;
             default: ret += c;
         }
     }

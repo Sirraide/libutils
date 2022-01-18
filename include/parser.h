@@ -16,6 +16,7 @@
 #include <unistd.h>
 #include <utility>
 #include <vector>
+#include <cstdarg>
 
 LIBUTILS_NAMESPACE_BEGIN
 #define LEXER_ERROR(format, ...)                              \
@@ -29,6 +30,61 @@ LIBUTILS_NAMESPACE_BEGIN
     case c:                            \
         token->string_content += repl; \
         goto next_char
+
+/** The type of the token */
+enum struct TokenTypeBase {
+    EndOfFile,
+    Identifier = 1000,
+    Number,
+    LBrace = L'{',
+    RBrace = L'}',
+    Comma  = L',',
+    Colon  = L':',
+    String = L'"',
+};
+
+template <typename TChar = char32_t>
+struct FileBase {
+    static_assert(std::is_same_v<TChar, char8_t> || std::is_same_v<TChar, char32_t>,
+        "TChar must be char8_t or char32_t!");
+    using TString = std::basic_string<TChar>;
+    TString     contents;       /// The contents of the file, mapped into memory
+    std::string name;           /// The path to the file
+    TChar*      end  = nullptr; /// The end of `contents'
+    TChar*      pos  = nullptr; /// The current position of the lexer in the file
+    U64         line = 1;       /// The current line position of the lexer in this file
+    U64         col{};          /// The current column position of the lexer in this file
+    bool        valid = false;  /// Whether this file is valid or not
+
+    virtual void HandleError(const std::string& err) {
+        Die("%s: %s", err.data(), ::strerror(errno));
+    }
+
+    /** Create a new file from the given path
+     * @param _name The path to the file */
+    explicit FileBase(std::string _name) : name(std::move(_name)) {
+        int fd = ::open(name.c_str(), O_RDONLY);
+        if (fd < 0) HandleError("open()");
+
+        struct stat s {};
+        if (::fstat(fd, &s)) HandleError("fstat()");
+        auto sz = U64(s.st_size);
+
+        auto* mem = (char*) ::mmap(nullptr, sz,
+            PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
+        if (mem == MAP_FAILED) HandleError("mmap()");
+
+        if constexpr (std::is_same_v<TChar, char8_t>) contents = mem;
+        else contents = ToUTF32(mem);
+
+        if (::munmap(mem, sz)) HandleError("munmap()");
+        if (::close(fd)) HandleError("close()");
+
+        pos   = &contents[0];
+        end   = contents.data() + contents.size();
+        valid = true;
+    }
+};
 
 constexpr inline Char Eof = (Char(EOF));
 
@@ -46,51 +102,7 @@ static inline int iswodigit(wint_t c) {
     return L'0' <= c && c <= L'7';
 }
 
-/** The type of the token */
-enum struct TokenTypeBase : Char {
-    EndOfFile,
-    Identifier = 1000,
-    Number,
-    LBrace = L'{',
-    RBrace = L'}',
-    Comma  = L',',
-    Colon  = L':',
-    String = L'"',
-};
-
-struct FileBase {
-    String      contents;       /// The contents of the file, mapped into memory
-    std::string name;           /// The path to the file
-    Char*       end  = nullptr; /// The end of `contents'
-    Char*       pos  = nullptr; /// The current position of the lexer in the file
-    U64         line = 1;       /// The current line position of the lexer in this file
-    U64         col{};          /// The current column position of the lexer in this file
-    bool        valid = false;  /// Whether this file is valid or not
-
-    /** Create a new file from the given path
-     * @param _name The path to the file */
-    explicit FileBase(std::string _name) : name(std::move(_name)) {
-        int fd = ::open(name.c_str(), O_RDONLY);
-        if (fd < 0) Die("open(): %s", ::strerror(errno));
-
-        struct stat s {};
-        if (::fstat(fd, &s)) Die("fstat(): %s", ::strerror(errno));
-        auto sz = U64(s.st_size);
-
-        auto* mem = (char*) ::mmap(nullptr, sz,
-            PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
-        if (mem == MAP_FAILED) Die("mmap(): %s", ::strerror(errno));
-
-        contents = ToUTF32(mem);
-        if (::munmap(mem, sz)) Die("munmap(): %s", ::strerror(errno));
-        if (::close(fd)) Die("close(): %s", ::strerror(errno));
-
-        pos = &contents[0];
-        end = contents.data() + contents.size();
-    }
-};
-
-template <typename File = FileBase>
+template <typename File = FileBase<>>
 struct SourceLocationBase {
     U64   line{};                /// The line location
     U64   col{};                 /// The column location
@@ -98,16 +110,16 @@ struct SourceLocationBase {
 
     SourceLocationBase(){};
 
-    template <typename StringType>
-    operator StringType() const {
+    template <typename TString>
+    operator TString() const {
         std::string s;
         s += source_file->name;
         s += ":";
         s += std::to_string(line);
         s += ":";
         s += std::to_string(col);
-        if constexpr (std::is_convertible_v<StringType, String>) return ToUTF32(s);
-        else if constexpr (std::is_convertible_v<StringType, std::string>) return s;
+        if constexpr (std::is_convertible_v<TString, String>) return ToUTF32(s);
+        else if constexpr (std::is_convertible_v<TString, std::string>) return s;
         else {
             ConstexprNotImplemented("Implicit conversion of SourceLocationBase to anything other than "
                                     "std::u32string or std::string is not supported.");
@@ -118,13 +130,16 @@ struct SourceLocationBase {
 std::ostream& operator<<(std::ostream& stream, const SourceLocationBase<>& loc);
 
 /** A token that is lexed by the lexer. */
-template <
+template <typename TChar    = char32_t,
     typename TokType        = TokenTypeBase,
-    typename SourceLocation = SourceLocationBase<FileBase>>
+    typename SourceLocation = SourceLocationBase<>>
 struct TokenBase {
-    using Type = TokType;
+    using Type    = TokType;
+    using TString = std::basic_string<TChar>;
+    static_assert(std::is_same_v<TString, decltype(SourceLocation{}.source_file->contents)>,
+        "TChar of TokenBase must be the same as that of FileBase");
     Type           type;           /// The type of this token
-    String         string_content; /// The string content of the token
+    TString        string_content; /// The string content of the token
     U64            number{};       /// The number that the token represents, if any
     SourceLocation loc{};          /// Where the token was lexed
 
@@ -142,29 +157,35 @@ struct TokenBase {
      * Stringise this token
      * @return A string representation of this token
      */
-    [[nodiscard]] String String() const {
+    [[nodiscard]] std::string String() const {
         return StringiseType(this);
     }
 };
 
-template <>
-String StringiseType(const auto* token);
+template <typename Tok>
+std::string StringiseType(const Tok* token);
 
 template <>
-String StringiseType<>(const TokenBase<>* token);
+std::string StringiseType<>(const TokenBase<>* token);
+
+#define IF32(_then, _else) [&] { if constexpr (is_32) return _then; else return _else; }()
 
 template <
-    typename _File           = FileBase,
+    typename _File           = FileBase<>,
     typename _SourceLocation = SourceLocationBase<_File>,
     typename _Token          = TokenBase<TokenTypeBase, _File>,
-    bool _newline_is_token   = false>
+    bool _newline_is_token   = false,
+    bool is_32               = std::is_same_v<typename _File::TChar, char32_t>>
 struct LexerBase {
     using File           = _File;
     using SourceLocation = _SourceLocation;
     using Token          = _Token;
     using T              = typename Token::Type;
+    using TChar          = typename File::TChar;
+    using TString        = std::basic_string<TChar>;
+    static_assert(std::is_same_v<TChar, char32_t> == is_32, "Error: May not supply a template parameter for is_32 in LexerBase");
 
-    Char              lastc  = U' ';                        /// The last character read. This is initially a space to trigger a call to SkipWhitespace()
+    TChar             lastc  = IF32(U' ', ' ');             /// The last character read. This is initially a space to trigger a call to SkipWhitespace()
     bool              at_eof = false;                       /// Whether the lexer has reached the end of the file
     Token*            token{};                              /// The last token read
     std::vector<File> files;                                /// All files that were at any point part of the file stack
@@ -207,6 +228,24 @@ struct LexerBase {
         std::cerr << '\n';
     }
 
+    int ToBinary(TChar c) { return c == IF32(U'0', '0') || c == IF32(U'1', '1') ? c - IF32(U'0', '0') : -1; }
+    int ToOctal(TChar c) { return c >= IF32(U'0', '0') && c <= IF32(U'7', '7') ? c - IF32(U'0', '0') : -1; }
+    int ToDecimal(TChar c) { return c >= IF32(U'0', '0') && c <= IF32(U'9', '9') ? c - IF32(U'0', '0') : -1; }
+    int ToHex(TChar c) {
+        if (c >= IF32(U'a', 'a') && c <= IF32(U'f', 'f')) return IF32(U'a', 'a');
+        if (c >= IF32(U'A', 'A') && c <= IF32(U'F', 'F')) return IF32(U'A', 'A');
+        ToDecimal(c);
+    }
+
+    template <U64 base>
+    std::function<int(TChar)> TCharToNumberForBase() {
+        if constexpr (base == 2) return ToBinary;
+        else if constexpr (base == 8) return ToOctal;
+        else if constexpr (base == 10) return ToDecimal;
+        else if constexpr (base == 16) return ToHex;
+        else ConstexprNotImplemented("NumberPredicateForBase: Only implemented for 2, 8, 10, 16");
+    }
+
     /**
      * Perform the process of lexing a number
      *
@@ -214,17 +253,18 @@ struct LexerBase {
      * @param predicate A predicate called on each character that
      * determines whether it is allowed in that number or not
      */
-    virtual void DoLexNumber(U64 base, const std::function<int(wint_t)>& predicate) {
+    template <U64 base>
+    void DoLexNumber() {
         /// Read all the digits into a buffer
-        String number_str;
-        while (predicate(wint_t(lastc))) {
+        TString number_str;
+        while (TCharToNumberForBase<base>()(lastc) >= 0) {
             number_str += lastc;
             NextChar();
         }
 
         /// Convert the string to a number
         U64 number = 0;
-        for (Char *ptr = number_str.data(), *end = ptr + number_str.size(); ptr < end; ptr++) {
+        for (TChar *ptr = number_str.data(), *end = ptr + number_str.size(); ptr < end; ptr++) {
             /// Multiply and check for overflow
             U64 old_num = number;
             number *= base;
@@ -264,11 +304,10 @@ struct LexerBase {
             /// It's hexadecimal
             if (lastc == L'x' || lastc == L'X') {
                 /// 0x alone is illegal
-                Char x = lastc;
+                TChar x = lastc;
                 NextChar();
-                if (!iswxdigit(wint_t(lastc)))
-                    LEXER_ERROR("Expected at least 1 digit after '0%lc'", x);
-                DoLexNumber(16, iswxdigit);
+                if (!IsDigit<16>(lastc)) LEXER_ERROR("Expected at least 1 digit after '0%lc'", x);
+                DoLexNumber<16>();
                 return;
             }
 

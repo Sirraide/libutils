@@ -25,6 +25,9 @@ struct Clopts {
         /**  This option takes an std::string */
         String,
 
+        /** This option consumes the remaining arguments as a string */
+        Rest,
+
         /**  This option takes a 64-bit unsigned integer */
         U64,
 
@@ -116,6 +119,15 @@ struct Clopts {
          * Return the string representation of this option’s type
          */
         [[nodiscard]] std::string TypeAsStr() const;
+
+        inline Type               OptType() const { return type; }
+        inline bool               Found() const { return found; }
+        inline const std::string& AsRest() const { return std::get<std::string>(value); }
+        inline const std::string& AsString() const { return std::get<std::string>(value); }
+        inline U64                AsU64() const { return std::get<U64>(value); }
+        inline I64                AsI64() const { return std::get<I64>(value); }
+        inline F64                AsF64() const { return std::get<F64>(value); }
+        inline bool               AsBool() const { return std::get<bool>(value); }
     };
 
 private:
@@ -150,6 +162,16 @@ private:
      * @return The parsed option value
      */
     auto ParseValue(Type type, const std::string_view& text) -> Value;
+
+    /**
+     * Consume the rest of the command line
+     * @param opt The option in which to save the rest of the command line
+     * @param text The contents of the first argument of the rest
+     * @param argc The number of arguments
+     * @param argv The argument vector
+     * @param i The current position in the command line
+     */
+    void ConsumeRest(Option& opt, const std::string_view& text, int argc, char** argv, int i);
 
     /**
      * Verify that no two options have the same name
@@ -197,20 +219,11 @@ public:
     auto Usage() -> std::string;
 
     /**
-     * Get the parsed value of an option
-     * @tparam T The Type of the Value
-     * @param name The name of the option whose value to get
-     * @return The value of the option
+     * Get an option
+     * @param name The name of the option
+     * @return The option, if found
      */
-    template <Type T>
-    auto get(const std::string& name) const -> TypeEnumToDataType<T> {
-        auto opt = std::find(options.begin(), options.end(), name);
-        if (opt == options.end()) opt = std::find(anonymous.begin(), anonymous.end(), name);
-        if (opt == anonymous.end()) Die("Clopts: No such option: %s", name.data());
-
-        if constexpr (T == Type::Void) return opt->found;
-        else return std::get<TypeEnumToDataType<T>>(opt->value);
-    }
+    auto operator[](const std::string& name) const -> const Option&;
 };
 
 /** For convenience */

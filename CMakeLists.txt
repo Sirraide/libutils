@@ -3,6 +3,7 @@ project(utils VERSION 1.0.0)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR})
+set(CMAKE_CXX_COMPILER g++)
 
 file(GLOB SRC src/*.cc src/*.h include/*.h)
 
@@ -10,7 +11,7 @@ add_library(utils STATIC ${SRC})
 target_compile_options(utils PRIVATE
         -Wall -Wextra -Wundef -Werror=return-type -Wconversion -Wpedantic
         -Wno-gnu-zero-variadic-macro-arguments -Wno-dollar-in-identifier-extension
-        -Wno-gnu-case-range)
+        -Wno-gnu-case-range -fPIC -fcoroutines)
 if (${CMAKE_CXX_COMPILER} STREQUAL "clang++")
     target_compile_options(utils PRIVATE -Xclang -fcolor-diagnostics)
 endif ()

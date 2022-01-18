@@ -1,8 +1,10 @@
 #ifndef UTILS_H
 #define UTILS_H
 
+#include <codecvt>
 #include <cstdlib>
 #include <iostream>
+#include <locale>
 #include <string>
 
 #ifdef NDEBUG
@@ -23,11 +25,11 @@
     []<bool flag = false> { static_assert(flag, msg); } \
     ()
 
-#define LIBUTILS_UNREACHABLE(...)                                               \
-    do {                                                                        \
-        __builtin_unreachable();                                                \
-        std::cerr << __FILE__ << ":" << __LINE__ << ": Error: Unreachable" << __func__ __VA_OPT__(<< "\n\tNote: "<< __VA_ARGS__) << "\n"; \
-        abort();                                                                \
+#define LIBUTILS_UNREACHABLE(...)                                                                                                          \
+    do {                                                                                                                                   \
+        __builtin_unreachable();                                                                                                           \
+        std::cerr << __FILE__ << ":" << __LINE__ << ": Error: Unreachable" << __func__ __VA_OPT__(<< "\n\tNote: " << __VA_ARGS__) << "\n"; \
+        abort();                                                                                                                           \
     } while (0)
 
 #ifndef LIBUTILS_USE_SCREAMING_SNAKE_CASE
@@ -65,13 +67,26 @@ void Die(const char* format, ...);
  */
 String Escape(const String& str);
 
+/** Escape a string
+ *  @param str the string to be escaped
+ *  @returns a new string containing the escaped contents of `str`
+ */
+std::string Escape(const std::string& str);
+
 /**
  * Convert UTF-32 to UTF-8
  *
  * @param what The UTF-32 string to be converted
  * @return A new std::string containing the contents of `what' as a UTF-8 string
  */
-std::string ToUTF8(const String& what);
+template <typename TString>
+std::string ToUTF8(const TString& what) {
+    if constexpr (std::is_convertible_v<TString, std::string>) return what;
+    else if constexpr (std::is_convertible_v<TString, std::u32string>) {
+        std::wstring_convert<std::codecvt_utf8<Char>, Char> conv;
+        return conv.to_bytes(what);
+    } else ConstexprNotImplemented("ToUTF8 currently only supports u8 and u32 strings");
+}
 
 /**
  * Convert UTF-8 to UTF-32
@@ -79,7 +94,14 @@ std::string ToUTF8(const String& what);
  * @param what The UTF-8 string to be converted
  * @return A new std::string containing the contents of `what' as a UTF-32 string
  */
-String ToUTF32(const std::string& what);
+template <typename TString>
+String ToUTF32(const TString& what) {
+    if constexpr (std::is_convertible_v<TString, std::string>) {
+        std::wstring_convert<std::codecvt_utf8<Char>, Char> conv;
+        return conv.from_bytes(what);
+    } else if constexpr (std::is_convertible_v<TString, std::u32string>) return what;
+    else ConstexprNotImplemented("ToUTF32 currently only supports u8 and u32 strings");
+}
 
 /// Base template
 template <bool cond, typename _Then, typename _Else>

@@ -13,12 +13,15 @@ Clopts::Option::Option(std::string _name, std::string _descr, Type _type, bool _
 [[nodiscard]] std::string Clopts::Option::TypeAsStr() const {
     using enum Type;
     switch (type) {
+        case Rest: return "[values]";
         case Void: return "";
         case String: return "string";
         case U64:
         case I64:
         case F64: return "number";
         case Bool: return "true|false";
+        default:
+            LIBUTILS_UNREACHABLE();
     }
 }
 
@@ -116,10 +119,19 @@ void Clopts::Parse(int argc, char** argv) {
             if (opt->type == Type::Void) continue;
 
             /// Otherwise, we need to parse the argument.
-            if (has_eq) opt->value = ParseValue(opt->type, option_raw.substr(pos + 1));
-            else {
+            if (has_eq) {
+                if (opt->type == Type::Rest) {
+                    ConsumeRest(*opt, option_raw.substr(pos + 1), argc, argv, i + 1);
+                    goto loop_end;
+                }
+                opt->value = ParseValue(opt->type, option_raw.substr(pos + 1));
+            } else {
                 /// If no equals sign was found, make sure we have enough arguments
                 if (++i == argc) CLOPTS_ERROR("Missing argument for option %*s", (int) option.size(), option.data());
+                if (opt->type == Type::Rest) {
+                    ConsumeRest(*opt, "", argc, argv, i);
+                    goto loop_end;
+                }
                 opt->value = ParseValue(opt->type, argv[i]);
             }
         }
@@ -149,6 +161,7 @@ void Clopts::Parse(int argc, char** argv) {
             opt->value = ParseValue(opt->type, argv[i]);
         }
     }
+loop_end:
 
     /// After we're done parsing, make sure all required options have been found
     for (const auto& opt : options)
@@ -175,12 +188,31 @@ Clopts::Value Clopts::ParseValue(Type type, const std::string_view& text) {
     }
 }
 
+void Clopts::ConsumeRest(Clopts::Option& opt, const std::string_view& text, int argc, char** argv, int i) {
+    opt.found                = true;
+    std::string& str_content = std::get<std::string>(opt.value);
+    str_content              = text;
+    str_content += " ";
+    while (i < argc) {
+        str_content += argv[i++];
+        str_content += " ";
+    }
+    str_content.erase(str_content.size() - 1);
+}
+
 void Clopts::AllowUnknown(bool allow) {
     allow_unknown = allow;
 }
 
 void Clopts::EnableHelpFlag(bool enable) {
     have_help_flag = enable;
+}
+
+auto Clopts::operator[](const std::string& name) const -> const Clopts::Option& {
+    auto opt = std::find(options.begin(), options.end(), name);
+    if (opt == options.end()) opt = std::find(anonymous.begin(), anonymous.end(), name);
+    if (opt == anonymous.end()) Die("Clopts: No such option: %s", name.data());
+    return *opt;
 }
 
 LIBUTILS_NAMESPACE_END
