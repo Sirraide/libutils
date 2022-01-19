@@ -73,10 +73,9 @@ struct File {
                 out.append(start, U64(pos - start));
                 co_yield out;
                 out.clear();
-                n_read -= U64(pos - start);
+                n_read -= U64(pos - start) + 1;
                 pos++;
             }
-
         } while (n_read == _bufsize);
         free(buf);
         if (!out.empty()) co_yield out;
@@ -94,9 +93,8 @@ struct File {
     }
 
     void Write(const std::string& str, U64 n = UINT64_MAX) requires Writable<mode> {
-        (void) str;
-        (void) n;
-        ConstexprNotImplemented("File::Write()");
+        U64 sz = std::min(str.size(), n);
+        write(fd, str.c_str(), sz);
     }
 
     explicit File(_err_handler_t _err_handler = _libutils_terminate)
@@ -132,9 +130,7 @@ struct SynchronousPipe {
     int   status;
 
     explicit SynchronousPipe(const std::string& command, _err_handler_t = _libutils_terminate);
-    SynchronousPipe(const SynchronousPipe& pipe);
-    SynchronousPipe(SynchronousPipe&& pipe) noexcept;
-    ~SynchronousPipe();
+    LIBUTILS_NON_COPYABLE_NON_MOVABLE(SynchronousPipe);
 };
 
 #endif // UTILS_FILE_H
