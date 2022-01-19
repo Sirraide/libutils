@@ -6,6 +6,7 @@
 #include <iostream>
 #include <locale>
 #include <string>
+#include <functional>
 
 #ifdef NDEBUG
 #    define DEBUG(...)
@@ -13,13 +14,8 @@
 #    define DEBUG(...) __VA_ARGS__
 #endif
 
-#ifdef LIBUTILS_NO_GLOBAL_NAMESPACE
-#    define LIBUTILS_NAMESPACE_BEGIN namespace utils {
-#    define LIBUTILS_NAMESPACE_END   }
-#else
-#    define LIBUTILS_NAMESPACE_BEGIN
-#    define LIBUTILS_NAMESPACE_END
-#endif
+#define LIBUTILS_NAMESPACE_BEGIN
+#define LIBUTILS_NAMESPACE_END
 
 #define LIBUTILS_CONSTEXPR_NOT_IMPLEMENTED(msg)         \
     []<bool flag = false> { static_assert(flag, msg); } \
@@ -32,8 +28,22 @@
         abort();                                                                                                                           \
     } while (0)
 
+#define LIBUTILS_NON_COPYABLE(type) \
+    type(const type&) = delete;     \
+    type& operator=(const type&) = delete
+
+#define LIBUTILS_NON_MOVABLE(type) \
+    type(type&&)  = delete;        \
+    type& operator=(type&&) = delete
+
+#define LIBUTILS_NON_COPYABLE_NON_MOVABLE(type) \
+    LIBUTILS_NON_COPYABLE(type);                \
+    LIBUTILS_NON_MOVABLE(type)
+
 #ifndef LIBUTILS_USE_SCREAMING_SNAKE_CASE
 #    define ConstexprNotImplemented(msg) LIBUTILS_CONSTEXPR_NOT_IMPLEMENTED(msg)
+#    define NonCopyable(type)            LIBUTILS_NON_COPYABLE(type)
+#    define NonMovable(type)             LIBUTILS_NON_MOVABLE(type)
 #    define Unreachable(...)             LIBUTILS_UNREACHABLE(__VA_ARGS__)
 #endif
 
@@ -54,6 +64,8 @@ using I64 = int64_t;
 
 using F32 = float;
 using F64 = double;
+
+using _err_handler_t = std::function<void(const std::string&)>;
 
 /**
  * This function does what you think it does
@@ -155,6 +167,12 @@ TString Trim(const TString& tstring) requires(std::is_same_v<std::remove_cvref_t
     return tstring.substr(start, end - start + !std::isspace((unsigned char) tstring[end]));
 }
 
+
+/**
+ * Print a message to the terminal and terminate
+ * @param errmsg The message to print
+ */
+[[noreturn]] void _libutils_terminate(const std::string& errmsg);
 LIBUTILS_NAMESPACE_END
 
 #endif /* UTILS_H */

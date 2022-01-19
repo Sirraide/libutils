@@ -6,6 +6,11 @@
 
 LIBUTILS_NAMESPACE_BEGIN
 
+[[noreturn]] void _libutils_terminate(const std::string& errmsg) {
+    std::cerr << errmsg << "\n";
+    std::terminate();
+}
+
 [[noreturn]] [[gnu::format(printf, 1, 2)]] //
 void Die(const char* format, ...) {
     va_list ap;
