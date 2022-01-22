@@ -12,7 +12,7 @@ struct PipePair {
 
 SynchronousPipe::SynchronousPipe(const std::string& command, _err_handler_t handler) {
     PipePair p_in, p_out, p_err;
-    pid_t pid = vfork();
+    pid_t    pid = vfork();
     if (pid < 0) return;
     if (pid == 0) {
         dup2(p_in._pair[0], STDIN_FILENO);
@@ -45,5 +45,5 @@ SynchronousPipe::SynchronousPipe(const std::string& command, _err_handler_t hand
         }
     while (!WIFEXITED(wstatus));
     status = WEXITSTATUS(wstatus);
-    valid = true;
+    valid  = true;
 }

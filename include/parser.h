@@ -4,9 +4,11 @@
 #include "./unicode-utils.h"
 #include "./utils.h"
 
+#include <cstdarg>
 #include <cstring>
 #include <cwctype>
 #include <fcntl.h>
+#include <filesystem>
 #include <functional>
 #include <iostream>
 #include <stack>
@@ -16,19 +18,18 @@
 #include <unistd.h>
 #include <utility>
 #include <vector>
-#include <cstdarg>
 
 LIBUTILS_NAMESPACE_BEGIN
-#define LEXER_ERROR(format, ...)                              \
-    do {                                                      \
-        Error(token->loc, format __VA_OPT__(, ) __VA_ARGS__); \
-        SkipToEOL();                                          \
-        return;                                               \
+#define LEXER_ERROR(format, ...)                             \
+    do {                                                     \
+        Error(token.loc, format __VA_OPT__(, ) __VA_ARGS__); \
+        SkipToEOL();                                         \
+        return;                                              \
     } while (0)
 
-#define ESCAPE_CHAR(c, repl, len)      \
-    case c:                            \
-        token->string_content += repl; \
+#define ESCAPE_CHAR(c, repl, len)     \
+    case c:                           \
+        token.string_content += repl; \
         goto next_char
 
 /** The type of the token */
@@ -43,11 +44,12 @@ enum struct TokenTypeBase {
     String = L'"',
 };
 
-template <typename TChar = char32_t>
+template <typename _TChar = char32_t>
 struct FileBase {
+    using TChar   = _TChar;
+    using TString = std::basic_string<TChar>;
     static_assert(std::is_same_v<TChar, char8_t> || std::is_same_v<TChar, char32_t>,
         "TChar must be char8_t or char32_t!");
-    using TString = std::basic_string<TChar>;
     TString     contents;       /// The contents of the file, mapped into memory
     std::string name;           /// The path to the file
     TChar*      end  = nullptr; /// The end of `contents'
@@ -55,10 +57,6 @@ struct FileBase {
     U64         line = 1;       /// The current line position of the lexer in this file
     U64         col{};          /// The current column position of the lexer in this file
     bool        valid = false;  /// Whether this file is valid or not
-
-    virtual void HandleError(const std::string& err) {
-        Die("%s: %s", err.data(), ::strerror(errno));
-    }
 
     /** Create a new file from the given path
      * @param _name The path to the file */
@@ -84,6 +82,53 @@ struct FileBase {
         end   = contents.data() + contents.size();
         valid = true;
     }
+    FileBase(const FileBase& other) {
+        U64 offset = other.pos - &other.contents[0];
+        contents   = other.contents;
+        name       = other.name;
+        pos        = &contents[0] + offset;
+        end        = contents.data() + contents.size();
+        line       = other.line;
+        col        = other.col;
+        valid      = other.valid;
+    }
+    FileBase& operator=(const FileBase& other) {
+        U64 offset = other.pos - &other.contents[0];
+        contents   = other.contents;
+        name       = other.name;
+        pos        = &contents[0] + offset;
+        end        = contents.data() + contents.size();
+        line       = other.line;
+        col        = other.col;
+        valid      = other.valid;
+    }
+
+    FileBase(FileBase&& other) noexcept {
+        U64 offset  = other.pos - &other.contents[0];
+        contents    = std::move(other.contents);
+        name        = std::move(other.name);
+        pos         = &contents[0] + offset;
+        end         = contents.data() + contents.size();
+        line        = other.line;
+        col         = other.col;
+        valid       = other.valid;
+        other.valid = false;
+    }
+    FileBase& operator=(FileBase&& other) noexcept {
+        U64 offset  = other.pos - &other.contents[0];
+        contents    = std::move(other.contents);
+        name        = std::move(other.name);
+        pos         = &contents[0] + offset;
+        end         = contents.data() + contents.size();
+        line        = other.line;
+        col         = other.col;
+        valid       = other.valid;
+        other.valid = false;
+    }
+
+    virtual void HandleError(const std::string& err) {
+        Die("%s: %s", err.data(), ::strerror(errno));
+    }
 };
 
 constexpr inline Char Eof = (Char(EOF));
@@ -102,13 +147,14 @@ static inline int iswodigit(wint_t c) {
     return L'0' <= c && c <= L'7';
 }
 
-template <typename File = FileBase<>>
+template <typename SourceFile = FileBase<>>
 struct SourceLocationBase {
-    U64   line{};                /// The line location
-    U64   col{};                 /// The column location
-    File* source_file = nullptr; /// Non-owning pointer to the file this location is in
+    using TFile = SourceFile;
+    U64         line{};                /// The line location
+    U64         col{};                 /// The column location
+    SourceFile* source_file = nullptr; /// Non-owning pointer to the file this location is in
 
-    SourceLocationBase(){};
+    SourceLocationBase() {}
 
     template <typename TString>
     operator TString() const {
@@ -130,13 +176,14 @@ struct SourceLocationBase {
 std::ostream& operator<<(std::ostream& stream, const SourceLocationBase<>& loc);
 
 /** A token that is lexed by the lexer. */
-template <typename TChar    = char32_t,
+template <typename _TChar   = char32_t,
     typename TokType        = TokenTypeBase,
     typename SourceLocation = SourceLocationBase<>>
 struct TokenBase {
     using Type    = TokType;
+    using TChar   = _TChar;
     using TString = std::basic_string<TChar>;
-    static_assert(std::is_same_v<TString, decltype(SourceLocation{}.source_file->contents)>,
+    static_assert(std::is_same_v<TString, typename SourceLocation::TFile::TString>,
         "TChar of TokenBase must be the same as that of FileBase");
     Type           type;           /// The type of this token
     TString        string_content; /// The string content of the token
@@ -145,61 +192,60 @@ struct TokenBase {
 
     TokenBase(){};
 
+    bool operator==(const TokenBase& other) const {
+        return type == other.type && string_content == other.string_content && number == other.number;
+    }
+
     /**
      * Print a token to stdout
      * @see #String
      */
-    void Print(std::ostream& stream = std::cout) const {
-        stream << ToUTF8(String());
+    void Print(FILE* file = stdout) const {
+        auto str = ToUTF8(Str());
+        fwrite((void*) str.c_str(), str.size(), 1, file);
     }
+
+    virtual ~TokenBase() = default;
 
     /**
      * Stringise this token
      * @return A string representation of this token
      */
-    [[nodiscard]] std::string String() const {
-        return StringiseType(this);
-    }
+    [[nodiscard]] virtual String Str() const = 0;
 };
-
-template <typename Tok>
-std::string StringiseType(const Tok* token);
-
-template <>
-std::string StringiseType<>(const TokenBase<>* token);
 
 #define IF32(_then, _else) [&] { if constexpr (is_32) return _then; else return _else; }()
 
 template <
-    typename _File           = FileBase<>,
-    typename _SourceLocation = SourceLocationBase<_File>,
-    typename _Token          = TokenBase<TokenTypeBase, _File>,
+    typename _SourceFile     = FileBase<>,
+    typename _Token          = TokenBase<TokenTypeBase, _SourceFile>,
+    typename _SourceLocation = SourceLocationBase<_SourceFile>,
     bool _newline_is_token   = false,
-    bool is_32               = std::is_same_v<typename _File::TChar, char32_t>>
+    bool is_32               = std::is_same_v<typename _SourceFile::TChar, char32_t>>
 struct LexerBase {
-    using File           = _File;
+    using SourceFile     = _SourceFile;
     using SourceLocation = _SourceLocation;
     using Token          = _Token;
     using T              = typename Token::Type;
-    using TChar          = typename File::TChar;
+    using TChar          = typename SourceFile::TChar;
     using TString        = std::basic_string<TChar>;
     static_assert(std::is_same_v<TChar, char32_t> == is_32, "Error: May not supply a template parameter for is_32 in LexerBase");
 
-    TChar             lastc  = IF32(U' ', ' ');             /// The last character read. This is initially a space to trigger a call to SkipWhitespace()
-    bool              at_eof = false;                       /// Whether the lexer has reached the end of the file
-    Token*            token{};                              /// The last token read
-    std::vector<File> files;                                /// All files that were at any point part of the file stack
-    std::stack<File*> file_stack;                           /// The file stack
-    File*             curr_file{};                          /// The file currently being processed
-    bool              newline_is_token = _newline_is_token; /// Whether newlines count as tokens
-    bool              has_error        = false;             /// Whether an error has occurred during lexing
-    static Token      global_empty_token;
+    TChar                   lastc  = IF32(U' ', ' ');             /// The last character read. This is initially a space to trigger a call to SkipWhitespace()
+    bool                    at_eof = false;                       /// Whether the lexer has reached the end of the file
+    Token                   token{};                              /// The last token read
+    std::vector<SourceFile> files;                                /// All files that were at any point part of the file stack
+    SourceFile*             curr_file{};                          /// The file currently being processed
+    bool                    newline_is_token = _newline_is_token; /// Whether newlines count as tokens
+    bool                    has_error        = false;             /// Whether an error has occurred during lexing
+    static Token            global_empty_token;
 
     explicit LexerBase(const std::string& filename) {
         files.emplace_back(filename);
-        file_stack.push(&files[0]);
-        curr_file = &files[0];
+        curr_file = std::addressof(files.front());
     }
+    LIBUTILS_NON_COPYABLE_NON_MOVABLE(LexerBase);
+    virtual ~LexerBase() = default;
 
     /**
      * Print the current location and a message and exit
@@ -276,7 +322,7 @@ struct LexerBase {
             if (old_num > number) LEXER_ERROR("Literal exceeds maximum integer size");
         }
 
-        token->number = number;
+        token.number = number;
     }
 
     /**
@@ -330,7 +376,7 @@ struct LexerBase {
 
             /// The number might be 0
             if (!iscontinue(int(lastc)) || lastc == L'-') {
-                token->number = 0;
+                token.number = 0;
                 return;
             }
 
@@ -365,11 +411,11 @@ struct LexerBase {
                     ESCAPE_CHAR(U'\'', U"\'", 1);
                     ESCAPE_CHAR(U'\"', U"\"", 1);
                     default:
-                        Error(token->loc, "Invalid escape sequence '\\%lc'", lastc);
+                        Error(token.loc, "Invalid escape sequence '\\%lc'", lastc);
                         break;
                 }
             }
-            token->string_content += lastc;
+            token.string_content += lastc;
         next_char:
             NextChar();
         }
@@ -385,14 +431,14 @@ struct LexerBase {
     /** Advance by one character */
     virtual void NextChar() {
         /// Pop the current file from the file stack once its end has been reached
-        if (at_eof || curr_file->pos == curr_file->end) {
-            if (file_stack.empty()) goto do_eof;
+        while (at_eof || curr_file->pos == curr_file->end) {
+            if (curr_file == std::addressof(files.front())) goto do_eof;
 
-            file_stack.pop();
-            if (!file_stack.empty()) {
-                curr_file = file_stack.top();
-                at_eof    = false;
-            } else {
+            curr_file--;
+            if (!at_eof && curr_file->pos != curr_file->end) {
+                at_eof = false;
+                break;
+            } else if (curr_file == std::addressof(files.front())) {
             do_eof:
                 at_eof = true;
                 lastc  = Eof;
@@ -426,11 +472,11 @@ struct LexerBase {
     virtual void NextToken() = 0;
 
     /** Lex all tokens and print them */
-    virtual void PrintAllTokens() {
+    virtual void PrintAllTokens(FILE* file = stdout) {
         do {
-            token->Print();
+            token.Print(file);
             NextToken();
-        } while (token->type != T::EndOfFile);
+        } while (token.type != T::EndOfFile);
     }
 
     /**
@@ -440,10 +486,11 @@ struct LexerBase {
      * find and map the file.
      * @param filename The path to the file to be included
      */
-    virtual void IncludeFile(std::string& filename) {
-        files.push_back(ResolveInclude(filename));
-        file_stack.push(&files.back());
-        curr_file = file_stack.top();
+    virtual void IncludeFile(const std::string& filename) {
+        auto file = ResolveInclude(filename);
+        if (!file.valid) Fatal(Here(), "Could not include file: %s", strerror(errno));
+        files.push_back(std::move(file));
+        curr_file = std::addressof(files.back());
     }
 
     /**
@@ -452,11 +499,9 @@ struct LexerBase {
      *
      * @return A File created from the path in question
      */
-    [[nodiscard]] virtual File ResolveInclude(std::string& filename) const {
-        std::string include(curr_file->name);
-        include += "/";
-        include += filename;
-        return File{include};
+    [[nodiscard]] virtual SourceFile ResolveInclude(const std::string& filename) const {
+        std::filesystem::path p{curr_file->name};
+        return SourceFile{(p.remove_filename() / filename).string()};
     }
 
     /** Advance the current position to the end of the line */

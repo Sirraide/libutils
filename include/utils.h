@@ -3,10 +3,10 @@
 
 #include <codecvt>
 #include <cstdlib>
+#include <functional>
 #include <iostream>
 #include <locale>
 #include <string>
-#include <functional>
 
 #ifdef NDEBUG
 #    define DEBUG(...)
@@ -88,6 +88,7 @@ std::string Escape(const std::string& str);
 /**
  * Convert UTF-32 to UTF-8
  *
+ * @tparam TString The string type
  * @param what The UTF-32 string to be converted
  * @return A new std::string containing the contents of `what' as a UTF-8 string
  */
@@ -103,6 +104,7 @@ std::string ToUTF8(const TString& what) {
 /**
  * Convert UTF-8 to UTF-32
  *
+ * @tparam TString The string type
  * @param what The UTF-8 string to be converted
  * @return A new std::string containing the contents of `what' as a UTF-32 string
  */
@@ -113,6 +115,26 @@ String ToUTF32(const TString& what) {
         return conv.from_bytes(what);
     } else if constexpr (std::is_convertible_v<TString, std::u32string>) return what;
     else ConstexprNotImplemented("ToUTF32 currently only supports u8 and u32 strings");
+}
+
+/**
+ * Replace all occurrences of one string with another string
+ * @tparam TString The string type
+ * @param str The string in which to replace
+ * @param from The string to replace
+ * @param to The replacement string
+ */
+template <typename TString>
+void ReplaceAll(TString& str, const TString& from, const TString& to) {
+    const U64 to_len   = to.size();
+    const U64 from_len = from.size();
+    U64       where    = 0;
+    for (;;) {
+        auto pos = str.find(from, where);
+        if (pos == TString::npos) return;
+        str.replace(pos, from_len, to);
+        where = pos + to_len;
+    }
 }
 
 /// Base template
@@ -166,7 +188,6 @@ TString Trim(const TString& tstring) requires(std::is_same_v<std::remove_cvref_t
     while (end > start && std::isspace((unsigned char) tstring[end])) end--;
     return tstring.substr(start, end - start + !std::isspace((unsigned char) tstring[end]));
 }
-
 
 /**
  * Print a message to the terminal and terminate

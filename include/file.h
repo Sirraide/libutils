@@ -33,10 +33,9 @@ struct File {
         /// Try to close whether open or not to get the error from errno
         if (fd == -1) err_handler("Close: invalid file descriptor");
         if (close(fd) < 0) err_handler(std::string{"Close: "} + strerror(errno));
-        else fd = -1;
     }
 
-    std::string Drain() requires Readable<mode> {
+    [[nodiscard]] std::string Drain() const requires Readable<mode> {
         std::string out;
         void*       buf = malloc(_bufsize);
         U64         n_read;
@@ -46,15 +45,13 @@ struct File {
             out.append((char*) buf, n_read);
         } while (n_read == _bufsize);
         free(buf);
-        close(fd);
         return out;
     err:
         free(buf);
-        close(fd);
         err_handler(std::strerror(errno));
     }
 
-    co_generator<std::string> Lines() requires Readable<mode> {
+    [[nodiscard]] co_generator<std::string> Lines() const requires Readable<mode> {
         char*       buf = (char*) malloc(4096);
         U64         n_read;
         std::string out;
@@ -86,19 +83,22 @@ struct File {
         co_return;
     }
 
-    std::string Read(U64 n = UINT64_MAX) requires Readable<mode> {
+    [[nodiscard]] std::string Read(U64 n = UINT64_MAX) const requires Readable<mode> {
         (void) n;
         ConstexprNotImplemented("File::Read()");
         return "";
     }
 
-    void Write(const std::string& str, U64 n = UINT64_MAX) requires Writable<mode> {
+    void Write(const std::string& str, U64 n = UINT64_MAX) const requires Writable<mode> {
         U64 sz = std::min(str.size(), n);
         write(fd, str.c_str(), sz);
     }
 
     explicit File(_err_handler_t _err_handler = _libutils_terminate)
         : err_handler(std::move(_err_handler)) {}
+
+    explicit File(FD _fd, _err_handler_t _err_handler = _libutils_terminate)
+        : fd(_fd), err_handler(std::move(_err_handler)) {}
 
     explicit File(const std::string& path, _err_handler_t _err_handler = _libutils_terminate)
         : err_handler(std::move(_err_handler)) {
@@ -113,7 +113,7 @@ struct File {
     }
 
     ~File() {
-        if (fd != -1) close(fd);
+        if (fd > 2) close(fd);
     }
 
     LIBUTILS_NON_COPYABLE_NON_MOVABLE(File);
