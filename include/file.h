@@ -38,22 +38,23 @@ struct File {
     [[nodiscard]] std::string Drain() const requires Readable<mode> {
         std::string out;
         void*       buf = malloc(_bufsize);
-        U64         n_read;
+        I64         n_read;
         do {
             n_read = read(fd, buf, _bufsize);
             if (n_read < 0) goto err;
-            out.append((char*) buf, n_read);
+            out.append((char*) buf, U64(n_read));
         } while (n_read == _bufsize);
         free(buf);
         return out;
     err:
         free(buf);
         err_handler(std::strerror(errno));
+        return "";
     }
 
     [[nodiscard]] co_generator<std::string> Lines() const requires Readable<mode> {
         char*       buf = (char*) malloc(4096);
-        U64         n_read;
+        I64         n_read;
         std::string out;
         do {
             n_read = read(fd, buf, _bufsize);
@@ -62,18 +63,18 @@ struct File {
             char *pos = buf, *start;
             for (;;) {
                 start = pos;
-                pos   = (char*) memchr(pos, '\n', n_read);
+                pos   = (char*) memchr(pos, '\n', U64(n_read));
                 if (!pos) {
-                    out.append(start, n_read);
+                    out.append(start, U64(n_read));
                     break;
                 }
                 out.append(start, U64(pos - start));
                 co_yield out;
                 out.clear();
-                n_read -= U64(pos - start) + 1;
+                n_read -= pos - start + 1;
                 pos++;
             }
-        } while (n_read == _bufsize);
+        } while (U64(n_read) == _bufsize);
         free(buf);
         if (!out.empty()) co_yield out;
         co_return;
