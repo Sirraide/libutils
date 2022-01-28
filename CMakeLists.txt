@@ -7,36 +7,38 @@ set(CMAKE_CXX_COMPILER g++)
 
 file(GLOB SRC src/*.cc src/*.h include/*.h)
 
+
+add_compile_options (-fdiagnostics-color=always)
 add_library(utils STATIC ${SRC})
-target_compile_options(utils PRIVATE
-        -Wall -Wextra -Wundef -Werror=return-type -Wconversion -Wpedantic
-        -Wno-gnu-zero-variadic-macro-arguments -Wno-dollar-in-identifier-extension
-        -Wno-gnu-case-range -fPIC -fcoroutines)
+target_compile_options(utils PRIVATE -Wall -Wextra -Wundef -Werror=return-type
+        -Wconversion -fPIC -fcoroutines)
 if (${CMAKE_CXX_COMPILER} STREQUAL "clang++")
-    target_compile_options(utils PRIVATE -Xclang -fcolor-diagnostics)
+target_compile_options(utils PRIVATE -Xclang -fcolor-diagnostics
+        -Wno-gnu-zero-variadic-macro-arguments -Wno-dollar-in-identifier-extension
+        -Wno-gnu-case-range)
 endif ()
 if (${CMAKE_BUILD_TYPE} STREQUAL "Release")
-    target_compile_options(utils PRIVATE -O3)
+target_compile_options(utils PRIVATE -O3)
 else ()
-    target_compile_options(utils PRIVATE -O0 -ggdb)
+target_compile_options(utils PRIVATE -O0 -ggdb)
 endif ()
 
 if (NOT APPLE)
-    set(CMAKE_INSTALL_RPATH $ORIGIN)
+set(CMAKE_INSTALL_RPATH $ORIGIN)
 endif ()
 
 set_target_properties(
-        utils PROPERTIES
-        SOVERSION 1
-        VERSION 1.0.0
+utils PROPERTIES
+SOVERSION 1
+VERSION 1.0.0
 )
 
 include(GNUInstallDirs)
 install(TARGETS utils
-        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-        COMPONENT LibUtils_Runtime
-        NAMELINK_COMPONENT LibIO_Development
-        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-        COMPONENT LibUtils_Development
-        )
+LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+COMPONENT LibUtils_Runtime
+NAMELINK_COMPONENT LibIO_Development
+ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+COMPONENT LibUtils_Development
+)
 install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/utils)
