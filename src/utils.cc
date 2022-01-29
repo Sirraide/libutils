@@ -1,8 +1,8 @@
 #include "../include/utils.h"
 
 #include <codecvt>
-#include <locale>
 #include <cstdarg>
+#include <locale>
 
 LIBUTILS_NAMESPACE_BEGIN
 
@@ -51,6 +51,34 @@ std::string Escape(const std::string& str) {
             case '\'': ret += "\\\'"; continue;
             case '\"': ret += "\\\""; continue;
             default: ret += c;
+        }
+    }
+    return ret;
+}
+
+std::string Unescape(const std::string& str) {
+    std::string ret;
+    for (U64 i = 0; i < str.size(); i++) {
+        switch (str[i]) {
+            case '\\': {
+                i++;
+                if (i == str.size()) return ret;
+                switch (str[i]) {
+                    case 'n': ret += '\n'; continue;
+                    case 'r': ret += '\r'; continue;
+                    case 't': ret += '\t'; continue;
+                    case 'v': ret += '\v'; continue;
+                    case 'f': ret += '\f'; continue;
+                    case '\'': ret += '\''; continue;
+                    case '\"': ret += '\"'; continue;
+                    case '\\': ret += '\\'; continue;
+                    default:
+                        ret += '\\';
+                        ret += str[i];
+                        continue;
+                }
+            } break;
+            default: ret += str[i];
         }
     }
     return ret;

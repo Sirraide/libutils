@@ -194,6 +194,9 @@ TString Trim(const TString& tstring) requires(std::is_same_v<std::remove_cvref_t
  * @param errmsg The message to print
  */
 [[noreturn]] void _libutils_terminate(const std::string& errmsg);
+
+std::string Unescape(const std::string& str);
+
 LIBUTILS_NAMESPACE_END
 
 #endif /* UTILS_H */
