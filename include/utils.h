@@ -175,6 +175,12 @@ TString ToLower(TString tstring) {
     return tstring;
 }
 
+template <typename TString>
+TString ToUpper(TString tstring) {
+    std::transform(tstring.begin(), tstring.end(), tstring.begin(), [](unsigned char c) { return std::toupper(c); });
+    return tstring;
+}
+
 /**
  * Trim leading and trailing whitespace
  * @tparam TString The string type to be used
