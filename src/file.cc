@@ -21,7 +21,7 @@ SynchronousPipe::SynchronousPipe(const std::string& command, _err_handler_t hand
         p_in.~PipePair();
         p_out.~PipePair();
         p_err.~PipePair();
-        execlp("/bin/sh", "sh", "-c", command.c_str(), nullptr);
+        execlp("/bin/bash", "bash", "-c", command.c_str(), nullptr);
         exit(127);
     }
     in.fd         = p_in._pair[1];
