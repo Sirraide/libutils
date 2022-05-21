@@ -30,7 +30,7 @@ void ResetTerminal() {
     tcsetattr(STDIN_FILENO, 0, &state);
 }
 
-Repl::Repl(std::string _prompt) : prompt(std::move(_prompt)) {
+Repl::Repl(std::string _prompt, bool reset_at_exit) : prompt(std::move(_prompt)) {
     prompt_width_in_chars = _prompt.size();
     setlocale(LC_ALL, "");
     termios t{};
@@ -39,7 +39,7 @@ Repl::Repl(std::string _prompt) : prompt(std::move(_prompt)) {
     cfmakeraw(&t);
     t.c_iflag |= ONLCR;
     tcsetattr(STDIN_FILENO, 0, &t);
-    atexit(ResetTerminal);
+    if (reset_at_exit) atexit(ResetTerminal);
 }
 
 void Repl::Write(const std::string& str) {

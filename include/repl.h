@@ -13,7 +13,7 @@ struct Repl {
     std::vector<std::pair<std::string, U64>> history{};
     U64                                      hist_index{};
 
-    Repl(std::string prompt);
+    Repl(std::string prompt, bool reset_at_exit = true);
 
     virtual bool HandleCTRLC();
     virtual bool HandleCTRLD();
