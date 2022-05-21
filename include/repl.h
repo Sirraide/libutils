@@ -5,12 +5,13 @@
 
 #include <functional>
 struct Repl {
-    U64                      cursor{};
-    std::string              line;
-    std::string              prompt;
-    U64                      line_size{};
+    U64                                      cursor{};
+    std::string                              line;
+    std::string                              prompt;
+    U64                                      line_size{};
+    U64                                      prompt_width_in_chars{};
     std::vector<std::pair<std::string, U64>> history{};
-    U64                      hist_index{};
+    U64                                      hist_index{};
 
     Repl(std::string prompt);
 

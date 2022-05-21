@@ -31,6 +31,7 @@ void ResetTerminal() {
 }
 
 Repl::Repl(std::string _prompt) : prompt(std::move(_prompt)) {
+    prompt_width_in_chars = _prompt.size();
     setlocale(LC_ALL, "");
     termios t{};
     tcgetattr(STDIN_FILENO, &t);
@@ -68,7 +69,7 @@ void Repl::RawMoveTo(U64 pos) {
 }
 
 void Repl::LogicalMoveTo(U64 pos) {
-    RawMoveTo(pos + 1 + prompt.size());
+    RawMoveTo(pos + 1 + prompt_width_in_chars);
     cursor = pos;
 }
 
